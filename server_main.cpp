@@ -82,7 +82,9 @@ void client_input(client_info *client) {
   skip:
     std::this_thread::sleep_for(10ms);
   }
-  // TODO: destroy client
+  close(client->socket);
+  destroy_controller(client->controller);
+  delete client;
 }
 
 uint64_t get_random_64bit() {
@@ -186,7 +188,7 @@ int main(void) {
         .socket = client_socket,
         .mut = std::mutex{},
         .input_queue = std::queue<macro>{},
-        .controller = 0, // TODO: controller init
+        .controller = controller_init(),
         .side = s,
         .ready_to_die = false,
 

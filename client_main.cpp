@@ -15,12 +15,13 @@
 using namespace std::chrono_literals;
 
 namespace conn {
-constexpr std::string address = "127.0.0.1";
+constexpr std::string address = "192.168.0.106";
 constexpr uint16_t port = 6969;
 int socket;
 }; // namespace conn
 
 namespace app {
+constexpr side side = side::right;
 bool running = true;
 const std::unordered_map<std::string, macro> input_map{
     {"4251595201907", macro::run_and_attack}, {"6429810459824", macro::jump}};
@@ -82,6 +83,13 @@ void client_connect() {
 
       if (!handshake()) {
         std::cerr << "Connection failed, retrying..." << std::endl;
+        close(conn::socket);
+        continue;
+      }
+
+      ssize_t sent_bytes = send(conn::socket, &app::side, sizeof(app::side), 0);
+      if (sent_bytes < 0) {
+        std::cerr << "Failed to send sideness" << std::endl;
         close(conn::socket);
         continue;
       }
