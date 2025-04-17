@@ -10,6 +10,9 @@ enum class macro : uint16_t { run_and_attack, jump, invalid };
 
 #define FORWARD (s == side::left ? 1.0 : -1.0)
 #define BACK (-FORWARD)
+
+#define LEFT (1.0f)
+#define RIGHT (-1.0f)
 #define UP (-1.0f)
 #define DOWN (1.0f)
 
