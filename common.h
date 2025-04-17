@@ -1,8 +1,11 @@
 #pragma once
 #include <cstdint>
+#include <ios>
 #include <limits>
 
 enum class macro : uint16_t { run_and_attack, jump, invalid };
+
+enum class side : uint8_t { left, right };
 
 constexpr uint16_t disconnect_flag = std::numeric_limits<uint16_t>::max();
 
@@ -21,3 +24,11 @@ inline uint64_t hash(uint64_t u) {
 
   return v;
 }
+
+#if __BIG_ENDIAN__
+#define htonll(x) (x)
+#define ntohll(x) (x)
+#else
+#define htonll(x) (((uint64_t)htonl((x) & 0xFFFFFFFF) << 32) | htonl((x) >> 32))
+#define ntohll(x) (((uint64_t)ntohl((x) & 0xFFFFFFFF) << 32) | ntohl((x) >> 32))
+#endif

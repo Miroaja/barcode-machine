@@ -1,9 +1,12 @@
 #include "common.h"
 #include <arpa/inet.h>
+#include <csignal>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
+#include <netinet/in.h>
+#include <signal.h>
 #include <string>
 #include <sys/socket.h>
 #include <thread>
@@ -12,7 +15,7 @@
 using namespace std::chrono_literals;
 
 namespace conn {
-constexpr std::string address = "";
+constexpr std::string address = "192.168.0.106";
 constexpr uint16_t port = 6969;
 int socket;
 }; // namespace conn
@@ -24,7 +27,7 @@ const std::unordered_map<std::string, macro> input_map{
 }; // namespace app
 
 bool handshake() {
-  uint32_t initial_value = 0xDEADBEEF;
+  uint32_t initial_value = htonl(0xDEADBEEF);
   ssize_t sent_bytes =
       send(conn::socket, &initial_value, sizeof(initial_value), 0);
   if (sent_bytes < 0) {
@@ -38,6 +41,7 @@ bool handshake() {
     std::cerr << "Failed to receive value from server" << std::endl;
     return false;
   }
+  x = ntohll(x);
   std::cout << "ACK!" << std::endl;
 
   uint64_t result = x;
@@ -46,6 +50,7 @@ bool handshake() {
     result = hash(result);
   }
 
+  result = htonll(result);
   ssize_t sent_hash_bytes = send(conn::socket, &result, sizeof(result), 0);
   if (sent_hash_bytes < 0) {
     std::cerr << "Failed to send hashed value back to server" << std::endl;
@@ -92,13 +97,23 @@ void client_connect() {
 }
 
 void send_macro(macro macro_id) {
+  std::cout << "Sending macro [" << (uint16_t)macro_id << "] to the server!"
+            << std::endl;
+  macro_id = (macro)htons((uint16_t)macro_id);
   ssize_t sent_hash_bytes = send(conn::socket, &macro_id, sizeof(macro_id), 0);
   if (sent_hash_bytes < 0) {
     std::cerr << "Failed to send macro" << std::endl;
   }
 }
 
+void sigint(int) { app::running = false; }
 int main(void) {
+  struct sigaction sa;
+  sa.sa_handler = sigint;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sigaction(SIGINT, &sa, nullptr);
+
   client_connect();
 
   std::string input;
@@ -110,6 +125,7 @@ int main(void) {
       send_macro(macro::invalid);
     }
   }
-  send(conn::socket, &disconnect_flag, sizeof(disconnect_flag), 0);
+  uint16_t tmp = htons(disconnect_flag);
+  send(conn::socket, &tmp, sizeof(tmp), 0);
   close(conn::socket);
 }
