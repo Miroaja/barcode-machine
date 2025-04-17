@@ -12,11 +12,15 @@
 #include <thread>
 #include <unistd.h>
 
+using namespace std::chrono_literals;
+
 namespace conn {
 constexpr uint16_t port = 6969;
 constexpr size_t max_clients = 4;
 int socket;
 }; // namespace conn
+
+constexpr int max_inputs_queued = 4;
 
 struct client_info {
   int socket;
@@ -27,13 +31,59 @@ struct client_info {
   bool ready_to_die;
 };
 
+bool check_queue_empty(client_info *client) {
+  std::lock_guard lck(client->mut);
+  return client->input_queue.empty();
+}
+
 void client_connection(client_info *client) {
   while (true) {
-    (void)client;
+    uint16_t buf;
+    ssize_t received_bytes = recv(client->socket, &buf, sizeof(buf), 0);
+    if (received_bytes != sizeof(buf)) {
+      std::cerr << "Failed to receive value from client" << std::endl;
+      continue;
+    }
+    buf = ntohs(buf);
+
+    if (buf == disconnect_flag) {
+      client->ready_to_die = true;
+      return;
+    }
+    macro m = (macro)buf;
+
+    {
+      std::lock_guard lck(client->mut);
+      if (client->input_queue.size() >= max_inputs_queued) {
+        continue;
+      }
+      client->input_queue.push(m);
+    }
   }
 }
 
-void client_input(client_info *client) { (void)client; }
+void client_input(client_info *client) {
+  while (!client->ready_to_die) {
+    macro m;
+    if (!check_queue_empty(client)) {
+      std::lock_guard lck(client->mut);
+      m = client->input_queue.front();
+      client->input_queue.pop();
+    } else {
+      goto skip;
+    }
+
+    switch (m) {
+      DO(run_and_attack);
+      DO(jump);
+      DO(invalid);
+    };
+
+  skip:
+    std::this_thread::sleep_for(10ms);
+  }
+  // TODO: destroy client
+}
 
 uint64_t get_random_64bit() {
   uint64_t random_value;
@@ -51,7 +101,7 @@ bool handshake(int socket) {
   ssize_t received_bytes =
       recv(socket, &initial_value, sizeof(initial_value), 0);
   if (received_bytes < 0) {
-    std::cerr << "Failed to send initial value" << std::endl;
+    std::cerr << "Failed to receive initial value" << std::endl;
     return false;
   }
   if (ntohl(initial_value) != 0xDEADBEEF) {
@@ -62,10 +112,9 @@ bool handshake(int socket) {
   uint64_t x = htonll(get_random_64bit());
   ssize_t sent_bytes = send(socket, &x, sizeof(x), 0);
   if (sent_bytes < 0) {
-    std::cerr << "Failed to receive value from server" << std::endl;
+    std::cerr << "Failed to send value to client" << std::endl;
     return false;
   }
-  std::cout << "ACK!" << std::endl;
 
   x = ntohll(x);
   uint64_t result = x;

@@ -3,9 +3,8 @@
 #include <ios>
 #include <limits>
 
-enum class macro : uint16_t { run_and_attack, jump, invalid };
-
 enum class side : uint8_t { left, right };
+#include "macros.h"
 
 constexpr uint16_t disconnect_flag = std::numeric_limits<uint16_t>::max();
 

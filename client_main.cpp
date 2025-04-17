@@ -15,7 +15,7 @@
 using namespace std::chrono_literals;
 
 namespace conn {
-constexpr std::string address = "192.168.0.106";
+constexpr std::string address = "127.0.0.1";
 constexpr uint16_t port = 6969;
 int socket;
 }; // namespace conn
