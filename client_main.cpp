@@ -15,7 +15,7 @@
 using namespace std::chrono_literals;
 
 namespace conn {
-constexpr std::string address = "192.168.0.106";
+constexpr std::string address = "82.130.57.174";
 constexpr uint16_t port = 6969;
 int socket;
 }; // namespace conn
@@ -24,7 +24,10 @@ namespace app {
 constexpr side side = side::right;
 bool running = true;
 const std::unordered_map<std::string, macro> input_map{
-    {"4251595201907", macro::run_and_attack}, {"6429810459824", macro::jump}};
+    {"5030949046086", macro::run},
+    {"5030930036027", macro::jump},
+    {"885370227406", macro::run_back},
+    {"8717418255183", macro::spin_jump}};
 }; // namespace app
 
 bool handshake() {
@@ -127,6 +130,10 @@ int main(void) {
   std::string input;
   while (app::running) {
     std::cin >> input;
+    if (input.empty()) {
+      send_macro(macro::invalid);
+    }
+
     if (app::input_map.contains(input)) {
       send_macro(app::input_map.at(input));
     } else {

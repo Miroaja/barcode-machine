@@ -74,7 +74,9 @@ void client_input(client_info *client) {
     }
 
     switch (m) {
-      DO(run_and_attack);
+      DO(run);
+      DO(run_back);
+      DO(spin_jump);
       DO(jump);
       DO(invalid);
     };
