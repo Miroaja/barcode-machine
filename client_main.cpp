@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <netinet/in.h>
+#include <ostream>
 #include <signal.h>
 #include <string>
 #include <sys/socket.h>
@@ -15,7 +16,7 @@
 using namespace std::chrono_literals;
 
 namespace conn {
-constexpr std::string address = "82.130.57.174";
+constexpr std::string address = "127.0.0.1";
 constexpr uint16_t port = 6969;
 int socket;
 }; // namespace conn
@@ -67,6 +68,7 @@ bool handshake() {
 
 void client_connect() {
   while (app::running) {
+    std::cout << "Attempting connection to: " << conn::address << std::endl;
     conn::socket = socket(AF_INET, SOCK_STREAM, 0);
     if (conn::socket < 0) {
       std::cerr << "Failed to create socket" << std::endl;
@@ -127,12 +129,9 @@ int main(void) {
 
   client_connect();
 
-  std::string input;
+  std::string input = "";
   while (app::running) {
     std::cin >> input;
-    if (input.empty()) {
-      send_macro(macro::invalid);
-    }
 
     if (app::input_map.contains(input)) {
       send_macro(app::input_map.at(input));
