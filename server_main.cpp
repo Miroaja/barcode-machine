@@ -1,5 +1,6 @@
 #include "common.h"
 #include "controller.h"
+#include "macros.h"
 #include <arpa/inet.h>
 #include <cstddef>
 #include <cstdint>
@@ -40,16 +41,17 @@ void client_connection(client_info *client) {
   while (true) {
     uint16_t buf;
     ssize_t received_bytes = recv(client->socket, &buf, sizeof(buf), 0);
+    if (received_bytes == 0) {
+      client->ready_to_die = true;
+      return;
+    }
+
     if (received_bytes != sizeof(buf)) {
       std::cerr << "Failed to receive value from client" << std::endl;
       continue;
     }
     buf = ntohs(buf);
 
-    if (buf == disconnect_flag) {
-      client->ready_to_die = true;
-      return;
-    }
     macro m = (macro)buf;
 
     {
@@ -73,13 +75,15 @@ void client_input(client_info *client) {
       goto skip;
     }
 
-    switch (m) {
-      DO(run);
-      DO(run_back);
-      DO(spin_jump);
-      DO(jump);
-      DO(invalid);
-    };
+    std::thread([m, client] {
+      switch (m) {
+        DO(run);
+        DO(run_back);
+        DO(spin_jump);
+        DO(jump);
+        DO(invalid);
+      }
+    }).detach();
 
   skip:
     std::this_thread::sleep_for(10ms);

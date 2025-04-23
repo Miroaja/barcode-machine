@@ -1,9 +1,11 @@
 #include "common.h"
+#include "macros.h"
 #include <arpa/inet.h>
 #include <csignal>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
+#include <fstream>
 #include <iostream>
 #include <netinet/in.h>
 #include <ostream>
@@ -16,13 +18,13 @@
 using namespace std::chrono_literals;
 
 namespace conn {
-constexpr std::string address = "127.0.0.1";
-constexpr uint16_t port = 6969;
+std::string address = "127.0.0.1";
+uint16_t port = 6969;
 int socket;
 }; // namespace conn
 
 namespace app {
-constexpr side side = side::right;
+side side = side::right;
 bool running = true;
 const std::unordered_map<std::string, macro> input_map{
     {"5030949046086", macro::run},
@@ -30,6 +32,35 @@ const std::unordered_map<std::string, macro> input_map{
     {"885370227406", macro::run_back},
     {"8717418255183", macro::spin_jump}};
 }; // namespace app
+
+void read_conf() {
+  std::ifstream f("client.conf");
+  if (!f.is_open()) {
+    std::cout << "Failed to open config file, using default conf.\n";
+    return;
+  }
+
+  std::string var, value;
+  while (f >> var >> value) {
+    if (var == "address") {
+      conn::address = value;
+    } else if (var == "port") {
+      try {
+        conn::port = static_cast<uint16_t>(std::stoi(value));
+      } catch (...) {
+        std::cerr << "Invalid value for port\n";
+      }
+    } else if (var == "side") {
+      if (value == "left") {
+        app::side = side::left;
+      } else if (value == "right") {
+        app::side = side::right;
+      } else {
+        std::cerr << "Invalid value for side\n";
+      }
+    }
+  }
+}
 
 bool handshake() {
   uint32_t initial_value = htonl(0xDEADBEEF);
@@ -127,6 +158,7 @@ int main(void) {
   sa.sa_flags = 0;
   sigaction(SIGINT, &sa, nullptr);
 
+  read_conf();
   client_connect();
 
   std::string input = "";
@@ -139,7 +171,5 @@ int main(void) {
       send_macro(macro::invalid);
     }
   }
-  uint16_t tmp = htons(disconnect_flag);
-  send(conn::socket, &tmp, sizeof(tmp), 0);
   close(conn::socket);
 }

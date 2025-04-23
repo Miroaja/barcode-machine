@@ -58,7 +58,15 @@ inline void spin_jump(controller c, side s) {
   sync(c);
 }
 
-inline void invalid(controller c, side) { (void)c; }
+inline void invalid(controller c, side s) {
+  press_button(c, BTN_X);
+  set_joystick<side::left>(c, FORWARD);
+  sync(c);
+  std::this_thread::sleep_for(100ms);
+  set_joystick<side::left>(c, NEUTRAL);
+  release_button(c, BTN_X);
+  sync(c);
+}
 }; // namespace macros
 
 #define DO(m)                                                                  \

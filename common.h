@@ -4,9 +4,6 @@
 #include <limits>
 
 enum class side : uint8_t { left, right };
-#include "macros.h"
-
-constexpr uint16_t disconnect_flag = std::numeric_limits<uint16_t>::max();
 
 inline uint64_t hash(uint64_t u) {
   uint64_t v = u * 3935559000370003845 + 2691343689449507681;
