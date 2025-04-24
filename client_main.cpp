@@ -3,14 +3,18 @@
 #include <arpa/inet.h>
 #include <csignal>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
 #include <netinet/in.h>
+#include <openssl/sha.h>
 #include <ostream>
 #include <signal.h>
 #include <string>
+#include <string_view>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
@@ -25,13 +29,64 @@ int socket;
 
 namespace app {
 side side = side::right;
+std::string dev_path = "/dev/input/event16";
+int dev_fd;
+const std::unordered_map<int, char> keymap = {
+    {KEY_A, 'a'},         {KEY_B, 'b'},           {KEY_C, 'c'},
+    {KEY_D, 'd'},         {KEY_E, 'e'},           {KEY_F, 'f'},
+    {KEY_G, 'g'},         {KEY_H, 'h'},           {KEY_I, 'i'},
+    {KEY_J, 'j'},         {KEY_K, 'k'},           {KEY_L, 'l'},
+    {KEY_M, 'm'},         {KEY_N, 'n'},           {KEY_O, 'o'},
+    {KEY_P, 'p'},         {KEY_Q, 'q'},           {KEY_R, 'r'},
+    {KEY_S, 's'},         {KEY_T, 't'},           {KEY_U, 'u'},
+    {KEY_V, 'v'},         {KEY_W, 'w'},           {KEY_X, 'x'},
+    {KEY_Y, 'y'},         {KEY_Z, 'z'},           {KEY_1, '1'},
+    {KEY_2, '2'},         {KEY_3, '3'},           {KEY_4, '4'},
+    {KEY_5, '5'},         {KEY_6, '6'},           {KEY_7, '7'},
+    {KEY_8, '8'},         {KEY_9, '9'},           {KEY_0, '0'},
+    {KEY_SPACE, ' '},     {KEY_MINUS, '-'},       {KEY_EQUAL, '='},
+    {KEY_DOT, '.'},       {KEY_COMMA, ','},       {KEY_SLASH, '/'},
+    {KEY_SEMICOLON, ';'}, {KEY_APOSTROPHE, '\''}, {KEY_LEFTBRACE, '['},
+    {KEY_RIGHTBRACE, ']'}};
 bool running = true;
-const std::unordered_map<std::string, macro> input_map{
-    {"5030949046086", macro::run},
-    {"5030930036027", macro::jump},
-    {"885370227406", macro::run_back},
-    {"8717418255183", macro::spin_jump}};
+
 }; // namespace app
+
+std::string read_str() {
+  struct input_event ev;
+  std::string buffer = "";
+
+  while (app::running) {
+    ssize_t n = read(app::dev_fd, &ev, sizeof(ev));
+    if (n != sizeof(ev)) {
+      continue;
+    }
+
+    if (ev.type == EV_KEY && ev.value == 1) {
+      if (ev.code == KEY_ENTER || ev.code == KEY_KPENTER) {
+        break;
+      }
+      if (ev.code == KEY_BACKSPACE && !buffer.empty()) {
+        buffer.pop_back();
+        continue;
+      }
+      if (app::keymap.contains(ev.code)) {
+        buffer.push_back(app::keymap.at(ev.code));
+      }
+    }
+  }
+  return buffer;
+}
+
+void setup_dev() {
+  std::cout << "Attempting to open device: " << app::dev_path << std::endl;
+  app::dev_fd = open(app::dev_path.c_str(), O_RDONLY, 0);
+  if (app::dev_fd < 0) {
+    std::cerr << "Failed to open device" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  std::cout << "Success!" << std::endl;
+}
 
 void read_conf() {
   std::ifstream f("client.conf");
@@ -58,6 +113,8 @@ void read_conf() {
       } else {
         std::cerr << "Invalid value for side\n";
       }
+    } else if (var == "input_path") {
+      app::dev_path = value;
     }
   }
 }
@@ -140,14 +197,11 @@ void client_connect() {
   }
 }
 
-void send_macro(macro macro_id) {
-  std::cout << "Sending macro [" << (uint16_t)macro_id << "] to the server!"
-            << std::endl;
-  macro_id = (macro)htons((uint16_t)macro_id);
-  ssize_t sent_hash_bytes = send(conn::socket, &macro_id, sizeof(macro_id), 0);
-  if (sent_hash_bytes < 0) {
-    std::cerr << "Failed to send macro" << std::endl;
-  }
+void send_macro(const std::string_view &code) {
+  macro hash_value;
+  SHA256((const uint8_t *)code.data(), code.size(), (uint8_t *)&hash_value);
+  std::cout << "Sending macro with code: " << code << "to server" << std::endl;
+  send(conn::socket, &hash_value, sizeof(hash_value), 0);
 }
 
 void sigint(int) { app::running = false; }
@@ -159,17 +213,14 @@ int main(void) {
   sigaction(SIGINT, &sa, nullptr);
 
   read_conf();
+  setup_dev();
   client_connect();
 
+  std::cout << "Awaiting input..." << std::endl;
   std::string input = "";
   while (app::running) {
-    std::cin >> input;
-
-    if (app::input_map.contains(input)) {
-      send_macro(app::input_map.at(input));
-    } else {
-      send_macro(macro::invalid);
-    }
+    input = read_str();
   }
+
   close(conn::socket);
 }

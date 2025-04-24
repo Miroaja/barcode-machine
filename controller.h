@@ -10,6 +10,7 @@
 #include <linux/uinput.h>
 #include <ostream>
 #include <string>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <utility>
 
@@ -43,6 +44,17 @@ inline controller controller_init() {
   }
 
   ioctl(fd, UI_SET_EVBIT, EV_KEY);
+
+  ioctl(fd, UI_SET_KEYBIT, BTN_0);
+  ioctl(fd, UI_SET_KEYBIT, BTN_1);
+  ioctl(fd, UI_SET_KEYBIT, BTN_2);
+  ioctl(fd, UI_SET_KEYBIT, BTN_3);
+  ioctl(fd, UI_SET_KEYBIT, BTN_4);
+  ioctl(fd, UI_SET_KEYBIT, BTN_5);
+  ioctl(fd, UI_SET_KEYBIT, BTN_6);
+  ioctl(fd, UI_SET_KEYBIT, BTN_7);
+  ioctl(fd, UI_SET_KEYBIT, BTN_8);
+  ioctl(fd, UI_SET_KEYBIT, BTN_9);
 
   ioctl(fd, UI_SET_KEYBIT, BTN_A);
   ioctl(fd, UI_SET_KEYBIT, BTN_B);

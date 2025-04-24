@@ -2,18 +2,26 @@
 #include "controller.h"
 #include "macros.h"
 #include <arpa/inet.h>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <fcntl.h>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <netinet/in.h>
+#include <openssl/sha.h>
+#include <optional>
 #include <queue>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
 
 using namespace std::chrono_literals;
+namespace chrono = std::chrono;
+namespace fs = std::filesystem;
 
 namespace conn {
 constexpr uint16_t port = 6969;
@@ -21,16 +29,19 @@ constexpr size_t max_clients = 4;
 int socket;
 }; // namespace conn
 
-constexpr int max_inputs_queued = 4;
-
 struct client_info {
   int socket;
   std::mutex mut;
   std::queue<macro> input_queue;
   controller controller;
   side side;
+  std::map<macro, std::pair<chrono::time_point<chrono::high_resolution_clock>,
+                            chrono::duration<float>>>
+      cooldowns;
   bool ready_to_die;
 };
+
+void load_macros() {}
 
 bool check_queue_empty(client_info *client) {
   std::lock_guard lck(client->mut);
@@ -39,7 +50,7 @@ bool check_queue_empty(client_info *client) {
 
 void client_connection(client_info *client) {
   while (true) {
-    uint16_t buf;
+    macro buf;
     ssize_t received_bytes = recv(client->socket, &buf, sizeof(buf), 0);
     if (received_bytes == 0) {
       client->ready_to_die = true;
@@ -50,16 +61,10 @@ void client_connection(client_info *client) {
       std::cerr << "Failed to receive value from client" << std::endl;
       continue;
     }
-    buf = ntohs(buf);
-
-    macro m = (macro)buf;
 
     {
       std::lock_guard lck(client->mut);
-      if (client->input_queue.size() >= max_inputs_queued) {
-        continue;
-      }
-      client->input_queue.push(m);
+      client->input_queue.push(buf);
     }
   }
 }
@@ -76,13 +81,9 @@ void client_input(client_info *client) {
     }
 
     std::thread([m, client] {
-      switch (m) {
-        DO(run);
-        DO(run_back);
-        DO(spin_jump);
-        DO(jump);
-        DO(invalid);
-      }
+      auto [start, duration] = client->cooldowns[m];
+
+      // TODO: implement new macro playing
     }).detach();
 
   skip:
@@ -196,8 +197,8 @@ int main(void) {
         .input_queue = std::queue<macro>{},
         .controller = controller_init(),
         .side = s,
+        .cooldowns = decltype(client_info::cooldowns){},
         .ready_to_die = false,
-
     };
 
     std::thread(client_connection, client).detach();
