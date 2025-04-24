@@ -21,16 +21,26 @@ sudo ./server
 # Writing macros
 
 ## Commands:
-press BUTTON 
+press BUTTON
+
 release BUTTON 
+
 -- Available buttons below
+
 wait time 
+
 -- time is expressed as a positive integer representing time to wait in milliseconds
+
 joy_l [x, y]
+
 -- [x, y] x and y are both floats in the range -1.0 to 1.0 representing the left joystick position (note that square brackets are mandatory)
+
 joy_r [x, y]
+
 -- [x, y] same as above but for the right joystick
+
 play [macro, ...]
+
 -- [marco, ...] list of strings representing the barcodes the play command can play, one will be randomly selected each time the command is ran. At least one macro must be specified. Square brackets mandatory.
 
 ## Available buttons
