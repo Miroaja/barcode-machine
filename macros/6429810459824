@@ -1,0 +1,25 @@
+
+press A
+press B
+wait 100
+release A
+release B
+
+press X
+wait 50
+release X
+
+joy_l [0.5, 0.0]
+wait 200
+joy_l [0.0, -0.5]
+wait 150
+joy_l [0.0, 0.0]
+
+press DPAD_LEFT
+wait 75
+release DPAD_LEFT
+
+press TL
+wait 100
+release TL
+

@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <csignal>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
@@ -16,6 +17,7 @@
 #include <string_view>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <termios.h>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
@@ -28,7 +30,6 @@ int socket;
 }; // namespace conn
 
 namespace app {
-side side = side::right;
 std::string dev_path = "/dev/input/event16";
 int dev_fd;
 const std::unordered_map<int, char> keymap = {
@@ -105,14 +106,6 @@ void read_conf() {
       } catch (...) {
         std::cerr << "Invalid value for port\n";
       }
-    } else if (var == "side") {
-      if (value == "left") {
-        app::side = side::left;
-      } else if (value == "right") {
-        app::side = side::right;
-      } else {
-        std::cerr << "Invalid value for side\n";
-      }
     } else if (var == "input_path") {
       app::dev_path = value;
     }
@@ -180,13 +173,6 @@ void client_connect() {
         continue;
       }
 
-      ssize_t sent_bytes = send(conn::socket, &app::side, sizeof(app::side), 0);
-      if (sent_bytes < 0) {
-        std::cerr << "Failed to send sideness" << std::endl;
-        close(conn::socket);
-        continue;
-      }
-
       std::cout << "Connected to the server!" << std::endl;
       break;
     } else {
@@ -200,7 +186,8 @@ void client_connect() {
 void send_macro(const std::string_view &code) {
   macro hash_value;
   SHA256((const uint8_t *)code.data(), code.size(), (uint8_t *)&hash_value);
-  std::cout << "Sending macro with code: " << code << "to server" << std::endl;
+  std::cout << "Sending macro with code: '" << code << "'  (hash '"
+            << hash_value << "') to server" << std::endl;
   send(conn::socket, &hash_value, sizeof(hash_value), 0);
 }
 
@@ -212,6 +199,19 @@ int main(void) {
   sa.sa_flags = 0;
   sigaction(SIGINT, &sa, nullptr);
 
+  termios term_info, save;
+  if (tcgetattr(STDIN_FILENO, &term_info) < 0) {
+    std::cerr << "Tcgetattr failed." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  save = term_info;
+
+  term_info.c_lflag &= ~ECHO;
+  if (tcsetattr(STDIN_FILENO, TCSANOW, &term_info) < 0) {
+    std::cerr << "Tcsetattr failed." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   read_conf();
   setup_dev();
   client_connect();
@@ -220,7 +220,14 @@ int main(void) {
   std::string input = "";
   while (app::running) {
     input = read_str();
+    send_macro(input);
   }
 
   close(conn::socket);
+
+  if (tcsetattr(STDIN_FILENO, TCSANOW, &save) < 0) {
+    std::cerr << "Tcsetattr failed. Run ttysane to restore a reasonable state."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
 }

@@ -7,18 +7,24 @@
 #include <fstream>
 #include <functional>
 #include <linux/input-event-codes.h>
+#include <map>
 #include <openssl/sha.h>
 #include <optional>
+#include <syncstream>
 #include <thread>
 
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
 struct macro {
-  uint8_t data[256];
+  uint8_t data[SHA256_DIGEST_LENGTH];
 
   bool operator<(const macro &other) const {
-    return std::memcmp(data, other.data, 256) < 0;
+    return std::memcmp(data, other.data, SHA256_DIGEST_LENGTH) < 0;
+  }
+
+  bool operator==(const macro &other) const {
+    return std::memcmp(data, other.data, SHA256_DIGEST_LENGTH) == 0;
   }
 };
 
@@ -63,20 +69,34 @@ inline std::string base64_encode(const uint8_t *data, size_t length) {
   return encoded;
 }
 
-using macro_fn = std::function<void()>;
+using macro_fn = std::function<void(controller, const void *)>;
 using macro_sequence = std::vector<macro_fn>;
 
-#define FAIL_HEADER "Error while parsing [" << unit << "] :"
+using context_t = const std::map<macro, macro_sequence>;
+
+inline void play_sequence(controller c, const macro_sequence &seq,
+                          context_t *context) {
+  for (const auto &action : seq) {
+    action(c, context);
+  }
+}
+
+inline const macro_sequence undefined_macro_seq = {
+    [](controller, const void *) {
+      // do some bs here;
+      std::cout << "huhh\n";
+    }};
+
+#define FAIL_HEADER "Error while parsing [" << unit << "] : "
 #define CHECK_TRAILING_OR_FAIL(ss, context)                                    \
   do {                                                                         \
     std::string trailing;                                                      \
     if (ss >> trailing) {                                                      \
-      std::cerr << FAIL_HEADER << "Unexpected trailing input after '"          \
-                << context << "': '" << trailing << "'" << std::endl;          \
+      std::cerr << FAIL_HEADER << "Unexpected trailing shit in '" << context   \
+                << "': '" << trailing << "'" << std::endl;                     \
       return {};                                                               \
     }                                                                          \
   } while (0)
-
 inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
   macro_sequence sequence;
   std::ifstream file(unit);
@@ -87,36 +107,36 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
     return {};
   }
 
-  auto press_key = [](const std::string &key) {
-    std::cout << "Pressing key: " << key << std::endl;
-    // Here we would simulate pressing a key via uinput or other means
+  auto press_key = [](controller c, uint16_t key, const std::string &key_name) {
+    std::cout << "Pressing key: " << key_name << std::endl;
+    press_button(c, key);
   };
 
-  auto release_key = [](const std::string &key) {
-    std::cout << "Releasing key: " << key << std::endl;
-    // Here we would simulate releasing a key via uinput or other means
+  auto release_key = [](controller c, uint16_t key,
+                        const std::string &key_name) {
+    std::cout << "Releasing key: " << key_name << std::endl;
+    release_button(c, key);
   };
 
-  auto wait = [](int ms) {
+  auto wait = [](controller c, int ms) {
     std::cout << "Waiting for " << ms << " ms" << std::endl;
+    sync(c);
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
   };
 
-  auto joy_l = [](float x, float y) {
+  auto joy_l = [](controller c, float x, float y) {
     std::cout << "Joystick L: (" << x << ", " << y << ")" << std::endl;
-    // Here we would send joystick values to the system (using uinput or
-    // similar)
+    set_joystick<side::left>(c, {x, y});
   };
 
-  auto joy_r = [](float x, float y) {
-    std::cout << "Joystick L: (" << x << ", " << y << ")" << std::endl;
-    // Here we would send joystick values to the system (using uinput or
-    // similar)
+  auto joy_r = [](controller c, float x, float y) {
+    std::cout << "Joystick R: (" << x << ", " << y << ")" << std::endl;
+    set_joystick<side::right>(c, {x, y});
   };
 
-  auto play_macro = [](const macro &macro) {
-    std::cout << "Playing macro with hash: " << macro << std::endl;
-    // We would look up the macro in `macro_map` and execute its sequence.
+  auto play_macro = [](controller c, const macro &macro, context_t *context) {
+    std::cout << "Playing macro with hash: '" << macro << "'" << std::endl;
+    play_sequence(c, context->at(macro), context);
   };
 
   while (std::getline(file, line)) {
@@ -132,7 +152,9 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
         return {};
       }
       CHECK_TRAILING_OR_FAIL(ss, "press");
-      sequence.push_back([key, press_key]() { press_key(key); });
+      sequence.push_back([key, press_key](controller c, const void *) {
+        press_key(c, keycode_map.at(key), key);
+      });
     } else if (command == "release") {
       std::string key;
       if (!(ss >> key)) {
@@ -141,10 +163,11 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
         return {};
       }
       CHECK_TRAILING_OR_FAIL(ss, "release");
-      sequence.push_back([key, release_key]() { release_key(key); });
+      sequence.push_back([key, release_key](controller c, const void *) {
+        release_key(c, keycode_map.at(key), key);
+      });
     } else if (command == "wait") {
       int time_ms;
-      ss >> time_ms;
       if (!(ss >> time_ms)) {
         std::cerr << FAIL_HEADER
                   << "'wait' command requires a time in milliseconds."
@@ -152,7 +175,8 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
         CHECK_TRAILING_OR_FAIL(ss, "wait");
         return {};
       }
-      sequence.push_back([time_ms, wait]() { wait(time_ms); });
+      sequence.push_back(
+          [time_ms, wait](controller c, const void *) { wait(c, time_ms); });
     } else if (command == "joy_l" || command == "joy_r") {
       char bracket_open, bracket_close;
       float x, y;
@@ -179,9 +203,11 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
 
       CHECK_TRAILING_OR_FAIL(ss, "joy_l/joy_r");
       if (command == "joy_l") {
-        sequence.push_back([x, y, joy_l]() { joy_l(x, y); });
+        sequence.push_back(
+            [x, y, joy_l](controller c, const void *) { joy_l(c, x, y); });
       } else {
-        sequence.push_back([x, y, joy_r]() { joy_r(x, y); });
+        sequence.push_back(
+            [x, y, joy_r](controller c, const void *) { joy_r(c, x, y); });
       }
     } else if (command == "play") {
       std::string macro_id;
@@ -213,103 +239,18 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
       }
 
       CHECK_TRAILING_OR_FAIL(ss, "play");
-      sequence.push_back([macros, play_macro]() {
-        size_t index = rand() % macros.size();
-        const macro &selected_macro = macros[index];
-        play_macro(selected_macro);
-      });
+      sequence.push_back(
+          [macros, play_macro](controller c, const void *context) {
+            size_t index = rand() % macros.size();
+            const macro &selected_macro = macros[index];
+            play_macro(c, selected_macro, (context_t *)context);
+          });
     } else {
       std::cerr << "Unknown command: " << command << std::endl;
     }
   }
 
+  sequence.push_back([](controller c, const void *) { sync(c); });
+
   return sequence;
 }
-
-#define LEFT (std::pair{1.0f, 0.0f})
-#define RIGHT (std::pair{-1.0f, 0.0f})
-#define UP (std::pair{-1.0f, 0.0f})
-#define DOWN (std::pair{1.0f, 0.0f})
-
-#define NEUTRAL {0.0f, 0.0f}
-
-#define FORWARD (s == side::left ? RIGHT : LEFT)
-#define BACK (s == side::left ? LEFT : RIGHT)
-
-// If you want to use the FORWARD and BACK macros for inputs, you must name
-// the second argument (of type side) to 's'
-
-namespace macros {
-inline void run(controller c, side s) {
-  set_joystick<side::left>(c, FORWARD);
-  sync(c);
-  std::this_thread::sleep_for(500ms);
-
-  set_joystick<side::left>(c, NEUTRAL);
-  sync(c);
-}
-inline void run_back(controller c, side) {
-  press_button(c, BTN_DPAD_DOWN);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_DPAD_DOWN);
-  sync(c);
-}
-inline void jump(controller c, side) {
-  press_button(c, BTN_A);
-  press_button(c, BTN_X);
-  sync(c);
-  std::this_thread::sleep_for(20ms);
-  release_button(c, BTN_A);
-  release_button(c, BTN_X);
-  sync(c);
-}
-inline void spin_jump(controller c, side) {
-  press_button(c, BTN_B);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_B);
-  sync(c);
-}
-inline void balls(controller c, side) {
-  press_button(c, BTN_X);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_X);
-  sync(c);
-}
-inline void balls2(controller c, side) {
-  press_button(c, BTN_Y);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_Y);
-  sync(c);
-}
-inline void balls3(controller c, side) {
-  press_button(c, BTN_DPAD_LEFT);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_DPAD_LEFT);
-  sync(c);
-}
-inline void balls4(controller c, side) {
-  press_button(c, BTN_DPAD_UP);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_DPAD_UP);
-  sync(c);
-}
-
-inline void invalid(controller c, side) {
-  press_button(c, BTN_DPAD_RIGHT);
-  sync(c);
-  std::this_thread::sleep_for(2ms);
-  release_button(c, BTN_DPAD_RIGHT);
-  sync(c);
-}
-}; // namespace macros
-
-#define DO(m)                                                                  \
-  case macro::m: {                                                             \
-    macros::m(client->controller, client->side);                               \
-  } break
