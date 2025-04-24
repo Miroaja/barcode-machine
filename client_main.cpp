@@ -215,6 +215,7 @@ int main(void) {
 
   read_conf();
 
+  // HACK: this is terrible
   std::string input = "";
   if (!setup_dev()) {
     goto end;
