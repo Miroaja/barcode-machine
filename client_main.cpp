@@ -79,14 +79,15 @@ std::string read_str() {
   return buffer;
 }
 
-void setup_dev() {
+bool setup_dev() {
   std::cout << "Attempting to open device: " << app::dev_path << std::endl;
   app::dev_fd = open(app::dev_path.c_str(), O_RDONLY, 0);
   if (app::dev_fd < 0) {
     std::cerr << "Failed to open device" << std::endl;
-    exit(EXIT_FAILURE);
+    return false;
   }
   std::cout << "Success!" << std::endl;
+  return true;
 }
 
 void read_conf() {
@@ -213,11 +214,14 @@ int main(void) {
   }
 
   read_conf();
-  setup_dev();
+
+  std::string input = "";
+  if (!setup_dev()) {
+    goto end;
+  }
   client_connect();
 
   std::cout << "Awaiting input..." << std::endl;
-  std::string input = "";
   while (app::running) {
     input = read_str();
     send_macro(input);
@@ -225,6 +229,7 @@ int main(void) {
 
   close(conn::socket);
 
+end:
   if (tcsetattr(STDIN_FILENO, TCSANOW, &save) < 0) {
     std::cerr << "Tcsetattr failed. Run ttysane to restore a reasonable state."
               << std::endl;
