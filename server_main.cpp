@@ -147,8 +147,8 @@ void client_input(client_info *client) {
         if (elapsed < duration) {
           duration =
               std::min(duration + app::cooldown_increment, app::cooldown_max);
-          // TODO: discuss wether to reset the start time here. i.e. if the
-          // cooldown should reset fully or just extend
+          //  NOTE: discuss wether to reset the start time here. i.e. if the
+          //  cooldown should reset fully or just extend
           return;
         }
 

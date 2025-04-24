@@ -87,7 +87,9 @@ inline const macro_sequence undefined_macro_seq = {
       std::cout << "huhh\n";
     }};
 
-#define FAIL_HEADER "Error while parsing [" << unit << "] : "
+#define FAIL_HEADER                                                            \
+  "Error while parsing [" << unit << "] @ line_n " << line_n << " : \n\""      \
+                          << line << "\"\n"
 #define CHECK_TRAILING_OR_FAIL(ss, context)                                    \
   do {                                                                         \
     std::string trailing;                                                      \
@@ -101,6 +103,7 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
   macro_sequence sequence;
   std::ifstream file(unit);
   std::string line;
+  int line_n = 0;
 
   if (!file.is_open()) {
     std::cerr << "Error opening file: " << unit << std::endl;
@@ -140,6 +143,11 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
   };
 
   while (std::getline(file, line)) {
+    line_n++;
+    if (line == "") {
+      continue;
+    }
+
     std::stringstream ss(line);
     std::string command;
     ss >> command;

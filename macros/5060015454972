@@ -1,0 +1,5 @@
+press DPAD_LEFT
+press DPAD_DOWN
+wait 400
+release DPAD_LEFT
+release DPAD_DOWN
