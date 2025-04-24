@@ -21,9 +21,9 @@ sudo ./server
 # Writing macros
 
 ## Commands:
-press BUTTON
+press button
 
-release BUTTON 
+release button 
 - Available buttons below
 
 wait time 
@@ -38,7 +38,7 @@ joy_r [x, y]
 play [macro, ...]
 - [marco, ...] list of strings representing the barcodes the play command can play, one will be randomly selected each time the command is ran. At least one macro must be specified. Square brackets mandatory.
 
-## Available buttons
+## Available buttons:
 0
 1
 2
