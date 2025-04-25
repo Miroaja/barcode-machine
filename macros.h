@@ -203,6 +203,7 @@ inline build_ret build_macro(const fs::path &unit) {
           for (const auto &[k, code] : keycode_map) {
             press_key(c, code, k);
           }
+          return;
         }
         press_key(c, keycode_map.at(key), key);
       });
@@ -219,6 +220,7 @@ inline build_ret build_macro(const fs::path &unit) {
           for (const auto &[k, code] : keycode_map) {
             release_key(c, code, k);
           }
+          return;
         }
         release_key(c, keycode_map.at(key), key);
       });
