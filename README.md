@@ -44,7 +44,11 @@ cooldown [base, increment, max]
 ## Comments:
 
 Comments may be added on their own lines.
-Comments always begin with a '#', followed by a space, followed by the comment.
+Comments always begin with a '#', followed by a space, followed by the comment, such as:
+```
+# this is a comment! (note the space after the #)
+            # You can even indent me!
+```
 
 ## Available buttons:
 0
