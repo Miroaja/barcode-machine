@@ -199,6 +199,11 @@ inline build_ret build_macro(const fs::path &unit) {
       }
       CHECK_TRAILING_OR_FAIL(ss, "press");
       sequence.push_back([key, press_key](controller c, const void *) {
+        if (key == "ALL") {
+          for (const auto &[k, code] : keycode_map) {
+            press_key(c, code, k);
+          }
+        }
         press_key(c, keycode_map.at(key), key);
       });
     } else if (command == "release") {
@@ -210,6 +215,11 @@ inline build_ret build_macro(const fs::path &unit) {
       }
       CHECK_TRAILING_OR_FAIL(ss, "release");
       sequence.push_back([key, release_key](controller c, const void *) {
+        if (key == "ALL") {
+          for (const auto &[k, code] : keycode_map) {
+            release_key(c, code, k);
+          }
+        }
         release_key(c, keycode_map.at(key), key);
       });
     } else if (command == "wait") {

@@ -24,7 +24,7 @@ sudo ./server
 press button
 
 release button 
-- Available buttons below
+- Available buttons below. If 'button' is 'ALL' then all buttons will be pressed/released 
 
 wait time 
 - time is expressed as a positive integer representing time to wait in milliseconds
