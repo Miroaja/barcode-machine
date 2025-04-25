@@ -38,6 +38,14 @@ joy_r [x, y]
 play [macro, ...]
 - [marco, ...] list of strings representing the barcodes the play command can play, one will be randomly selected each time the command is ran. At least one macro must be specified. Square brackets mandatory.
 
+cooldown [base, increment, max]
+- [base, increment, max] list of integers representing the cooldown parameters for this macro in milliseconds, this may be specified anywhere in the file, if multiple cooldown commands are issued, the only last one takes effect. 'base' reflects the amount of time this macro will be on cooldown. 'increment' is added to the remaining cooldown if the macro is requested while on cooldown, capping at 'max'
+
+## Comments:
+
+Comments may be added on their own lines.
+Comments always begin with a '#', followed by a space, followed by the comment.
+
 ## Available buttons:
 0
 1

@@ -35,14 +35,21 @@ int socket;
 
 using duration_t = chrono::duration<float>;
 
+using spec_t = std::tuple<duration_t, duration_t, duration_t>;
+
 namespace app {
 std::mutex macro_mut;
 std::map<macro, macro_sequence> macros;
 std::atomic_bool running = true;
 std::atomic_bool paused = false;
-duration_t cooldown_increment = 1s;
-duration_t cooldown_base = 500ms;
-duration_t cooldown_max = 3s;
+constexpr duration_t cooldown_increment = 1s;
+constexpr duration_t cooldown_base = 500ms;
+constexpr duration_t cooldown_max = 3s;
+
+constexpr spec_t default_cooldown = {cooldown_base, cooldown_increment,
+                                     cooldown_max};
+
+std::map<macro, spec_t> cooldown_specs;
 }; // namespace app
 
 struct client_info {
@@ -83,8 +90,10 @@ void load_macros() {
       exit(EXIT_FAILURE);
     }
 
+    auto [sequence, spec_opt] = std::move(*sequence_opt);
     std::lock_guard lck(app::macro_mut);
-    app::macros[macro_id] = std::move(*sequence_opt);
+    app::cooldown_specs[macro_id] = spec_opt.value_or(app::default_cooldown);
+    app::macros[macro_id] = sequence;
     std::cout << "Loaded macro: " << filename << " with hash '" << macro_id
               << "'" << std::endl;
   }
@@ -134,9 +143,12 @@ void client_input(client_info *client) {
 
     std::thread([m, client] {
       auto now = chrono::high_resolution_clock::now();
-
+      if (!app::cooldown_specs.contains(m)) {
+        app::cooldown_specs[m] = app::default_cooldown;
+      }
+      const auto &[base, increment, max] = app::cooldown_specs[m];
       if (!client->cooldowns.contains(m)) {
-        client->cooldowns[m] = std::pair{now, app::cooldown_base};
+        client->cooldowns[m] = std::pair{now, base};
         std::cout << "Initializing cooldown for macro: '" << m << "'"
                   << std::endl;
       } else {
@@ -145,14 +157,13 @@ void client_input(client_info *client) {
         auto elapsed = chrono::duration_cast<duration_t>(now - start);
 
         if (elapsed < duration) {
-          duration =
-              std::min(duration + app::cooldown_increment, app::cooldown_max);
+          duration = std::min(duration + increment, max);
           //  NOTE: discuss wether to reset the start time here. i.e. if the
           //  cooldown should reset fully or just extend
           return;
         }
 
-        duration = app::cooldown_base;
+        duration = base;
         start = now;
       }
 

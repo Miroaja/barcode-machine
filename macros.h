@@ -2,6 +2,7 @@
 #include "common.h"
 #include "controller.h"
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -11,9 +12,12 @@
 #include <openssl/sha.h>
 #include <optional>
 #include <syncstream>
+#include <termios.h>
 #include <thread>
+#include <tuple>
 
 using namespace std::chrono_literals;
+namespace chrono = std::chrono;
 namespace fs = std::filesystem;
 
 struct macro {
@@ -86,6 +90,11 @@ inline const macro_sequence undefined_macro_seq = {
       // do some bs here;
       std::cout << "huhh\n";
     }};
+using duration_t = chrono::duration<float>;
+
+using build_ret = std::optional<
+    std::pair<macro_sequence,
+              std::optional<std::tuple<duration_t, duration_t, duration_t>>>>;
 
 #define FAIL_HEADER                                                            \
   "Error while parsing [" << unit << "] @ line_n " << line_n << " : \n\""      \
@@ -99,7 +108,7 @@ inline const macro_sequence undefined_macro_seq = {
       return {};                                                               \
     }                                                                          \
   } while (0)
-inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
+inline build_ret build_macro(const fs::path &unit) {
   macro_sequence sequence;
   std::ifstream file(unit);
   std::string line;
@@ -142,6 +151,8 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
     play_sequence(c, context->at(macro), context);
   };
 
+  std::optional<std::tuple<duration_t, duration_t, duration_t>> spec = {};
+
   while (std::getline(file, line)) {
     line_n++;
     if (line == "") {
@@ -151,8 +162,35 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
     std::stringstream ss(line);
     std::string command;
     ss >> command;
+    if (command == "#") {
+      continue;
+    } else if (command == "cooldown") {
+      char bracket_open, bracket_close;
+      int base, increment, max;
 
-    if (command == "press") {
+      if (!(ss >> bracket_open) || bracket_open != '[') {
+        std::cerr << FAIL_HEADER
+                  << "'cooldown' command expects an opening bracket '['."
+                  << std::endl;
+        return {};
+      }
+      if (!(ss >> base) || !(ss.ignore(1, ',')) || !(ss >> increment) ||
+          !(ss.ignore(1, ',')) || !(ss >> max)) {
+        std::cerr << FAIL_HEADER
+                  << "'cooldown' command requires three integer values "
+                     "separated by a comma."
+                  << std::endl;
+        return {};
+      }
+      if (!(ss >> bracket_close) || bracket_close != ']') {
+        std::cerr << FAIL_HEADER
+                  << "'cooldown' command expects a closing bracket "
+                     "']'.\n";
+        return {};
+      }
+      spec = {chrono::milliseconds(base), chrono::milliseconds(increment),
+              chrono::milliseconds(max)};
+    } else if (command == "press") {
       std::string key;
       if (!(ss >> key)) {
         std::cerr << FAIL_HEADER << "'press' command requires a key name."
@@ -260,5 +298,5 @@ inline std::optional<macro_sequence> build_macro(const fs::path &unit) {
 
   sequence.push_back([](controller c, const void *) { sync(c); });
 
-  return sequence;
+  return std::pair{sequence, spec};
 }
