@@ -160,11 +160,17 @@ inline build_ret build_macro(const fs::path &unit) {
     }
 
     std::stringstream ss(line);
+    char comment;
+    if ((ss >> comment) && comment == '#') {
+      continue;
+    }
+
+    ss.str(line);
+    ss.clear();
+
     std::string command;
     ss >> command;
-    if (command == "#") {
-      continue;
-    } else if (command == "cooldown") {
+    if (command == "cooldown") {
       char bracket_open, bracket_close;
       int base, increment, max;
 
