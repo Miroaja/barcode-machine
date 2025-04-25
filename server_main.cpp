@@ -144,27 +144,32 @@ void client_input(client_info *client) {
     std::thread([m, client] {
       auto now = chrono::high_resolution_clock::now();
       if (!app::cooldown_specs.contains(m)) {
+        std::unique_lock lck(app::macro_mut);
         app::cooldown_specs[m] = app::default_cooldown;
       }
-      const auto &[base, increment, max] = app::cooldown_specs[m];
-      if (!client->cooldowns.contains(m)) {
-        client->cooldowns[m] = std::pair{now, base};
-        std::cout << "Initializing cooldown for macro: '" << m << "'"
-                  << std::endl;
-      } else {
-        auto &[start, duration] = client->cooldowns[m];
+      {
+        std::unique_lock lck(app::macro_mut);
+        const auto &[base, increment, max] = app::cooldown_specs[m];
+        lck.unlock();
+        if (!client->cooldowns.contains(m)) {
+          std::lock_guard lck(client->mut);
+          client->cooldowns[m] = std::pair{now, base};
+        } else {
+          std::unique_lock lck(client->mut);
+          auto &[start, duration] = client->cooldowns[m];
 
-        auto elapsed = chrono::duration_cast<duration_t>(now - start);
+          auto elapsed = chrono::duration_cast<duration_t>(now - start);
 
-        if (elapsed < duration) {
-          duration = std::min(duration + increment, max);
-          //  NOTE: discuss wether to reset the start time here. i.e. if the
-          //  cooldown should reset fully or just extend
-          return;
+          if (elapsed < duration) {
+            duration = std::min(duration + increment, max);
+            //  NOTE: discuss wether to reset the start time here. i.e. if the
+            //  cooldown should reset fully or just extend
+            return;
+          }
+
+          duration = base;
+          start = now;
         }
-
-        duration = base;
-        start = now;
       }
 
       macro_sequence seq;

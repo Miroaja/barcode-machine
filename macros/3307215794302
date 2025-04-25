@@ -1,3 +1,6 @@
 press DPAD_LEFT
 wait 400
 release DPAD_LEFT
+# this is a comment! (note the space after the #)
+            # You can even indent me!
+
